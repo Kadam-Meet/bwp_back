@@ -8,6 +8,18 @@ function getMongoUri() {
   return uri;
 }
 
+function getMaskedMongoUri(uri) {
+  try {
+    const url = new URL(uri.replace('mongodb+srv://', 'https://').replace('mongodb://', 'http://'));
+    const protocol = uri.startsWith('mongodb+srv://') ? 'mongodb+srv://' : 'mongodb://';
+    const maskedAuth = url.username ? `${url.username}:***@` : '';
+    const dbName = url.pathname && url.pathname !== '/' ? url.pathname : '';
+    return `${protocol}${maskedAuth}${url.host}${dbName}`;
+  } catch (_) {
+    return '[masked-uri]';
+  }
+}
+
 async function connectOnce() {
   if (cachedConnection) return cachedConnection;
   if (isConnecting) return mongoose.connection;
@@ -23,7 +35,7 @@ async function connectOnce() {
 
 async function connectWithRetry({ retryDelayMs = 2000 } = {}) {
   console.log(`\n🗄️ ===== DATABASE CONNECTION =====`);
-  console.log(`🗄️ [URI] ${getMongoUri()}`);
+  console.log(`🗄️ [URI] ${getMaskedMongoUri(getMongoUri())}`);
   console.log(`🗄️ [RETRY_DELAY] ${retryDelayMs}ms`);
   console.log(`🗄️ ================================\n`);
   

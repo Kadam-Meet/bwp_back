@@ -1,0 +1,17 @@
+# Ignore Node dependencies everywhere
+node_modules/
+
+# Ignore environment files in all packages
+.env
+.env.*
+*/.env
+*/.env.*
+
+# Optional: common noise
+*.log
+logs/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
