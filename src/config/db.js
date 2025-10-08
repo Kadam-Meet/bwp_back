@@ -4,7 +4,7 @@ let isConnecting = false;
 let cachedConnection = null;
 
 function getMongoUri() {
-  const uri = process.env.MONGO_URI || 'mongodb://localhost:27017/chatapp';
+  const uri = process.env.MONGO_URI || 'mongodb+srv://shanishcharasanvi_db_user:AWgWjfbi6QkL2Y0V@cluster0.kbtwfcx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
   return uri;
 }
 
@@ -49,7 +49,7 @@ async function connectWithRetry({ retryDelayMs = 2000 } = {}) {
       const conn = await connectOnce();
       console.log('✅ [DB] Connected to MongoDB successfully');
       console.log('✅ [DB] Connection state:', mongoose.connection.readyState);
-      console.log('✅ [DB] Database name:', mongoose.connection.db.databaseName);
+      console.log('✅ [DB] Database name:', mongoose.connection.db?.databaseName || 'chatapp');
       console.log('✅ [DB] Host:', mongoose.connection.host);
       console.log('✅ [DB] Port:', mongoose.connection.port);
       
