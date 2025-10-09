@@ -35,9 +35,11 @@ async function createUser(req, res) {
       return res.status(400).json({ error: 'invalid_email' });
     }
     console.log('🟡 [USER] Creating user with:', { name, email });
-    const user = await User.create({ name, email, password });
+    const alias = generateAlias();
+    const anonymousId = generateAnonymousId();
+    const user = await User.create({ name, email, password, alias, anonymousId });
     console.log('✅ [USER] User created successfully:', user._id);
-    return res.status(201).json({ id: user._id, name: user.name, email: user.email });
+    return res.status(201).json({ id: user._id, name: user.name, email: user.email, alias: user.alias, anonymousId: user.anonymousId });
   } catch (err) {
     console.log('❌ [USER] Error creating user:', err.message);
     if (err && err.code === 11000) {
@@ -71,9 +73,15 @@ async function loginUser(req, res) {
     if (!isValidEmail(email)) {
       return res.status(400).json({ error: 'invalid_email' });
     }
-    const user = await User.findOne({ email, password });
+    let user = await User.findOne({ email, password });
     if (!user) {
       return res.status(401).json({ error: 'invalid_credentials' });
+    }
+    // Backfill alias/anonymousId if missing
+    if (!user.alias) user.alias = generateAlias();
+    if (!user.anonymousId) user.anonymousId = generateAnonymousId();
+    if (user.isModified && (user.isModified('alias') || user.isModified('anonymousId'))) {
+      try { await user.save(); } catch (_) {}
     }
     return res.json({ id: user._id, name: user.name, email: user.email, alias: user.alias || null, anonymousId: user.anonymousId || null });
   } catch (err) {
