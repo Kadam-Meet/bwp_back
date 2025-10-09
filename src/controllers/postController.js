@@ -1,8 +1,6 @@
 const Post = require('../models/Post');
 const Room = require('../models/Room');
 const User = require('../models/User');
-const Comment = require('../models/Comment');
-const Reaction = require('../models/Reaction');
 
 // POST /posts
 async function createPost(req, res) {
@@ -128,65 +126,9 @@ async function listPosts(req, res) {
   }
 }
 
-// DELETE /posts/:id
-async function deletePost(req, res) {
-  const { id } = req.params;
-  console.log('🔴 [POST] DELETE /posts/:id -', id);
-  try {
-    // Extract userId from common locations to support different clients
-    const userIdFromHeader = req.get('x-user-id');
-    const userId = req.body?.userId || req.query?.userId || userIdFromHeader;
-
-    if (!userId) {
-      console.log('❌ [POST] Missing userId for delete');
-      return res.status(400).json({ error: 'userId_required' });
-    }
-
-    const post = await Post.findById(id);
-    if (!post) {
-      return res.status(404).json({ error: 'not_found' });
-    }
-
-    // Owner-only deletion enforcement
-    if (String(post.authorId) !== String(userId)) {
-      console.log('⛔ [POST] Delete forbidden: requester is not the post owner', {
-        requester: String(userId),
-        owner: String(post.authorId),
-        postId: String(post._id)
-      });
-      return res.status(403).json({ error: 'forbidden_not_owner' });
-    }
-
-    // Delete related reactions and comments first
-    const [reactionsDelete, commentsDelete] = await Promise.all([
-      Reaction.deleteMany({ postId: id }),
-      Comment.deleteMany({ postId: id }),
-    ]);
-
-    // Delete the post
-    await Post.deleteOne({ _id: id });
-
-    // Decrement counters (best-effort)
-    const roomUpdate = Room.findByIdAndUpdate(post.roomId, { $inc: { recentPostCount: -1 } });
-    const userUpdate = User.findByIdAndUpdate(post.authorId, { $inc: { totalPosts: -1 } });
-    await Promise.allSettled([roomUpdate, userUpdate]);
-
-    console.log('✅ [POST] Deleted post and relations', {
-      postId: id,
-      reactionsDeleted: reactionsDelete.deletedCount || 0,
-      commentsDeleted: commentsDelete.deletedCount || 0,
-    });
-    return res.json({ success: true });
-  } catch (err) {
-    console.log('❌ [POST] Error deleting post:', err.message);
-    return res.status(500).json({ error: 'internal_error' });
-  }
-}
-
 module.exports = {
   createPost,
   listPosts,
-  deletePost,
 };
 
 
