@@ -6,14 +6,22 @@ const User = require('../models/User');
 async function createPost(req, res) {
   console.log('🔵 [POST] POST /posts - Request body:', req.body);
   try {
-    const { title, content, authorId, roomId, category, isVoiceNote } = req.body;
+    const { title, content, authorId, roomId, category, duration, isVoiceNote } = req.body;
     if (!title || !content || !authorId || !roomId) {
       console.log('❌ [POST] Missing required fields');
       return res.status(400).json({ error: 'title, content, authorId, roomId are required' });
     }
 
-    // Enforce 24-hour expiration for all posts
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // Calculate expiration date based on duration
+    let expiresAt = null;
+    if (duration && duration !== 'permanent') {
+      const now = new Date();
+      if (duration === '24h') {
+        expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      } else if (duration === '7d') {
+        expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      }
+    }
 
     console.log('🟡 [POST] Creating post with:', { title, authorId, roomId, category, duration });
     const post = await Post.create({ 
@@ -22,7 +30,7 @@ async function createPost(req, res) {
       authorId, 
       roomId, 
       category: category || 'General',
-      duration: '24h',
+      duration: duration || 'permanent',
       isVoiceNote: isVoiceNote || false,
       expiresAt
     });
@@ -65,14 +73,7 @@ async function listPosts(req, res) {
   try {
     const { roomId, limit = 20, offset = 0 } = req.query;
     
-    // Exclude expired posts explicitly and by expiresAt
-    let query = { 
-      isExpired: { $ne: true },
-      $or: [
-        { expiresAt: null },
-        { expiresAt: { $gt: new Date() } }
-      ]
-    };
+    let query = { isExpired: { $ne: true } };
     if (roomId) {
       query.roomId = roomId;
       console.log('🔵 [POST] Filtering by roomId:', roomId);

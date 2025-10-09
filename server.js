@@ -134,37 +134,6 @@ async function bootstrap() {
   const mongooseConnection = getMongooseConnection();
   await runMigrations(mongooseConnection);
 
-  // Backfill: ensure all existing posts have an expiresAt 24h after createdAt
-  try {
-    const Post = require('./src/models/Post');
-    const now = new Date();
-    const result = await Post.updateMany(
-      {
-        $or: [
-          { expiresAt: null },
-          { expiresAt: { $exists: false } }
-        ]
-      },
-      [
-        {
-          $set: {
-            expiresAt: {
-              $cond: [
-                { $ifNull: [ '$createdAt', false ] },
-                { $add: [ '$createdAt', 24 * 60 * 60 * 1000 ] },
-                new Date(now.getTime() + 24 * 60 * 60 * 1000)
-              ]
-            },
-            duration: '24h'
-          }
-        }
-      ]
-    );
-    console.log(`🧹 [BACKFILL] expiresAt set for ${result.modifiedCount || result.nModified || 0} posts`);
-  } catch (err) {
-    console.log('⚠️  [BACKFILL] Skipped expiresAt backfill:', err.message);
-  }
-
   // Start server
   app.listen(process.env.PORT || 5000, () => {
     console.log(`Server running on port ${process.env.PORT || 5000}`);
