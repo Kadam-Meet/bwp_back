@@ -98,6 +98,8 @@ app.use('/api/users', require('./src/routes/users'));
 app.use('/api/posts', require('./src/routes/posts'));
 app.use('/api/rooms', require('./src/routes/rooms'));
 app.use('/api/reactions', require('./src/routes/reactions'));
+app.use('/api/badges', require('./src/routes/badges'));
+app.use('/api/comments', require('./src/routes/comments'));
 
 // Also keep root routes for direct access
 app.use('/health', require('./src/routes/health'));
@@ -106,6 +108,8 @@ app.use('/users', require('./src/routes/users'));
 app.use('/posts', require('./src/routes/posts'));
 app.use('/rooms', require('./src/routes/rooms'));
 app.use('/reactions', require('./src/routes/reactions'));
+app.use('/badges', require('./src/routes/badges'));
+app.use('/comments', require('./src/routes/comments'));
 
 // Session stats endpoint for debugging
 app.get('/api/debug/sessions', (req, res) => {
