@@ -1,6 +1,5 @@
 const Room = require('../models/Room');
 const Post = require('../models/Post');
-const RoomMember = require('../models/RoomMember');
 
 // GET /rooms
 async function listRooms(req, res) {
@@ -31,9 +30,6 @@ async function listRooms(req, res) {
     
     // Calculate dynamic stats for each room
     const response = await Promise.all(rooms.map(async (room) => {
-      // Count members in this room
-      const memberCount = await RoomMember.countDocuments({ roomId: room._id });
-      
       // Count recent posts (last 24 hours)
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const recentPostCount = await Post.countDocuments({ 
@@ -55,7 +51,7 @@ async function listRooms(req, res) {
         icon: room.icon,
         gradient: room.gradient,
         isTrending: room.isTrending,
-        memberCount,
+        memberCount: 0, // Remove member system
         recentPostCount,
         lastActivity,
         createdAt: room.createdAt
@@ -87,7 +83,7 @@ async function getRoom(req, res) {
       .limit(10);
 
     // Calculate dynamic stats
-    const memberCount = await RoomMember.countDocuments({ roomId: req.params.id });
+    const memberCount = 0; // Remove member system
     
     // Count recent posts (last 24 hours)
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);

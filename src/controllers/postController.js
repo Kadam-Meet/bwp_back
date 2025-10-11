@@ -64,7 +64,7 @@ async function listPosts(req, res) {
   console.log('🔵 [POST] GET /posts - Fetching posts');
   console.log('🔵 [POST] Query params:', req.query);
   try {
-    const { roomId, limit = 20, offset = 0 } = req.query;
+    const { roomId, authorId, limit = 20, offset = 0 } = req.query;
     
     // Exclude expired posts explicitly and by expiresAt
     let query = { 
@@ -77,6 +77,10 @@ async function listPosts(req, res) {
     if (roomId) {
       query.roomId = roomId;
       console.log('🔵 [POST] Filtering by roomId:', roomId);
+    }
+    if (authorId) {
+      query.authorId = authorId;
+      console.log('🔵 [POST] Filtering by authorId:', authorId);
     }
 
     console.log('🔵 [POST] MongoDB query:', JSON.stringify(query));
