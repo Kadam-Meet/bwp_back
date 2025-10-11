@@ -1,5 +1,5 @@
 const express = require('express');
-const { createUser, listUsers, loginUser, createAnonymous, logoutUser, testEndpoint } = require('../controllers/userController');
+const { createUser, listUsers, loginUser, createAnonymous, logoutUser, testEndpoint, getUserStats } = require('../controllers/userController');
 
 const router = express.Router();
 
@@ -9,6 +9,7 @@ router.get('/', listUsers);
 router.post('/login', loginUser);
 router.post('/logout', logoutUser);
 router.post('/anonymous', createAnonymous);
+router.get('/:id/stats', getUserStats);
 
 module.exports = router;
 

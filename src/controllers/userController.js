@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
+const Post = require('../models/Post');
+const Reaction = require('../models/Reaction');
 
 function isValidEmail(email) {
   return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -346,6 +348,76 @@ async function logoutUser(req, res) {
   }
 }
 
+// GET /users/:id/stats
+async function getUserStats(req, res) {
+  console.log('🔵 [USER] GET /users/:id/stats - Fetching user stats:', req.params.id);
+  try {
+    const userId = req.params.id;
+    
+    // Get user's posts
+    const posts = await Post.find({ authorId: userId });
+    
+    // Calculate stats
+    const totalPosts = posts.length;
+    
+    // Get total reactions across all posts
+    let totalReactions = 0;
+    for (const post of posts) {
+      const reactions = await Reaction.find({ postId: post._id });
+      const postReactions = reactions.reduce((sum, reaction) => {
+        return sum + (reaction.reactionType === 'tea' ? 1 : 0) +
+               (reaction.reactionType === 'spicy' ? 1 : 0) +
+               (reaction.reactionType === 'cap' ? 1 : 0) +
+               (reaction.reactionType === 'hearts' ? 1 : 0);
+      }, 0);
+      totalReactions += postReactions;
+    }
+    
+    // Find top category
+    const categoryCount = {};
+    posts.forEach(post => {
+      categoryCount[post.category] = (categoryCount[post.category] || 0) + 1;
+    });
+    const topCategory = Object.keys(categoryCount).reduce((a, b) => 
+      categoryCount[a] > categoryCount[b] ? a : b, 'General'
+    );
+    
+    // Get user info for member since
+    const user = await User.findById(userId);
+    const memberSince = user ? new Date(user.createdAt).toLocaleDateString('en-US', { 
+      month: 'long', 
+      year: 'numeric' 
+    }) : 'Unknown';
+    
+    // Calculate streak (simplified - days since last post)
+    const lastPost = posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+    const streak = lastPost ? Math.floor((new Date() - new Date(lastPost.createdAt)) / (1000 * 60 * 60 * 24)) : 0;
+    
+    const averageReactions = totalPosts > 0 ? Math.round(totalReactions / totalPosts) : 0;
+    
+    console.log('✅ [USER] User stats calculated:', {
+      totalPosts,
+      totalReactions,
+      topCategory,
+      memberSince,
+      streak,
+      averageReactions
+    });
+    
+    return res.json({
+      totalPosts,
+      totalReactions,
+      topCategory,
+      memberSince,
+      streak,
+      averageReactions
+    });
+  } catch (err) {
+    console.log('❌ [USER] Error fetching user stats:', err.message);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+}
+
 module.exports = {
   createUser,
   listUsers,
@@ -353,6 +425,7 @@ module.exports = {
   createAnonymous,
   logoutUser,
   testEndpoint,
+  getUserStats,
 };
 
 

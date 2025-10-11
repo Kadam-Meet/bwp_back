@@ -97,7 +97,55 @@ async function getRoom(req, res) {
   }
 }
 
+// POST /rooms
+async function createRoom(req, res) {
+  console.log('🔵 [ROOM] POST /rooms - Creating new room');
+  console.log('🔵 [ROOM] Request body:', req.body);
+  try {
+    const { name, description, icon, gradient, category } = req.body;
+    
+    // Validate required fields
+    if (!name || !description) {
+      return res.status(400).json({ error: 'name_and_description_required' });
+    }
+
+    // Create new room
+    const newRoom = new Room({
+      name,
+      description,
+      icon: icon || '🏠',
+      gradient: gradient || 'bg-gradient-to-br from-blue-500 to-purple-600',
+      category: category || 'General',
+      memberCount: 0,
+      recentPostCount: 0,
+      isTrending: false,
+      lastActivity: 'Just created'
+    });
+
+    const savedRoom = await newRoom.save();
+    console.log('✅ [ROOM] Room created successfully:', savedRoom._id);
+
+    return res.status(201).json({
+      id: savedRoom._id,
+      name: savedRoom.name,
+      description: savedRoom.description,
+      icon: savedRoom.icon,
+      gradient: savedRoom.gradient,
+      category: savedRoom.category,
+      isTrending: savedRoom.isTrending,
+      memberCount: savedRoom.memberCount,
+      recentPostCount: savedRoom.recentPostCount,
+      lastActivity: savedRoom.lastActivity,
+      createdAt: savedRoom.createdAt
+    });
+  } catch (err) {
+    console.log('❌ [ROOM] Error creating room:', err.message);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+}
+
 module.exports = {
   listRooms,
   getRoom,
+  createRoom,
 };
