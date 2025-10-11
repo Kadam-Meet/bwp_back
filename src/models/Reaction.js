@@ -13,7 +13,7 @@ const reactionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Ensure unique combination of user, post, and reaction type
-reactionSchema.index({ postId: 1, userId: 1, reactionType: 1 }, { unique: true });
+// Ensure one user can only have one reaction per post (regardless of type)
+reactionSchema.index({ postId: 1, userId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Reaction', reactionSchema);

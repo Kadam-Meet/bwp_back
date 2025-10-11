@@ -78,20 +78,50 @@ async function addReaction(req, res) {
     }
     console.log(`✅ [REACTION-${requestId}] User found: "${user.name}" (${user.email})`);
 
-    // Remove any existing reaction from this user for this post
-    const deletedReactions = await Reaction.deleteMany({ postId, userId });
-    console.log(`🟡 [REACTION-${requestId}] Removed ${deletedReactions.deletedCount} existing reactions`);
+    // Check if user already has a reaction on this post
+    const existingReaction = await Reaction.findOne({ postId, userId });
+    
+    if (existingReaction) {
+      console.log(`🟡 [REACTION-${requestId}] User already has a reaction on this post: ${existingReaction.reactionType}`);
+      
+      // If it's the same reaction type, return the existing one
+      if (existingReaction.reactionType === reactionType) {
+        console.log(`🟡 [REACTION-${requestId}] Same reaction type, returning existing reaction`);
+        return res.status(200).json({
+          id: existingReaction._id,
+          postId: existingReaction.postId,
+          userId: existingReaction.userId,
+          reactionType: existingReaction.reactionType,
+          createdAt: existingReaction.createdAt,
+          message: 'Reaction already exists'
+        });
+      }
+      
+      // Update the existing reaction to the new type
+      existingReaction.reactionType = reactionType;
+      await existingReaction.save();
+      console.log(`✅ [REACTION-${requestId}] Updated existing reaction to: ${reactionType}`);
+      
+      return res.status(200).json({
+        id: existingReaction._id,
+        postId: existingReaction.postId,
+        userId: existingReaction.userId,
+        reactionType: existingReaction.reactionType,
+        createdAt: existingReaction.createdAt,
+        message: 'Reaction updated'
+      });
+    }
 
-    // Add new reaction
+    // Create new reaction (user doesn't have any reaction on this post yet)
     const reaction = await Reaction.create({ postId, userId, reactionType });
-    console.log(`✅ [REACTION-${requestId}] Reaction created with ID: ${reaction._id}`);
+    console.log(`✅ [REACTION-${requestId}] New reaction created with ID: ${reaction._id}`);
 
-    // Update user's total reactions
+    // Update user's total reactions (only for new reactions, not updates)
     await User.findByIdAndUpdate(userId, {
       $inc: { totalReactions: 1 },
       lastActiveAt: new Date()
     });
-    console.log(`✅ [REACTION-${requestId}] Updated user's total reactions`);
+    console.log(`✅ [REACTION-${requestId}] Updated user's total reactions for new reaction`);
 
     console.log(`✅ [REACTION-${requestId}] REACTION ADDED SUCCESSFULLY!`);
     console.log(`🔵 [REACTION-${requestId}] ===== ADD REACTION SUCCESS =====\n`);
@@ -159,13 +189,27 @@ async function removeReaction(req, res) {
 
     console.log(`🟡 [REACTION-${requestId}] All validations passed, removing reaction...`);
 
-    const result = await Reaction.deleteOne({ postId, userId, reactionType });
-    console.log(`🟡 [REACTION-${requestId}] Delete result: ${result.deletedCount} reactions removed`);
-
-    if (result.deletedCount === 0) {
-      console.log(`❌ [REACTION-${requestId}] REACTION NOT FOUND`);
+    // Find the user's reaction on this post (regardless of type)
+    const existingReaction = await Reaction.findOne({ postId, userId });
+    
+    if (!existingReaction) {
+      console.log(`❌ [REACTION-${requestId}] NO REACTION FOUND for user on this post`);
       return res.status(404).json({ error: 'reaction_not_found' });
     }
+
+    // Check if the reaction type matches what we're trying to remove
+    if (existingReaction.reactionType !== reactionType) {
+      console.log(`🟡 [REACTION-${requestId}] User's reaction type (${existingReaction.reactionType}) doesn't match requested type (${reactionType})`);
+      return res.status(400).json({ 
+        error: 'reaction_type_mismatch',
+        currentReactionType: existingReaction.reactionType,
+        requestedReactionType: reactionType
+      });
+    }
+
+    // Remove the reaction
+    await Reaction.deleteOne({ postId, userId });
+    console.log(`✅ [REACTION-${requestId}] Reaction removed successfully`);
 
     // Update user's total reactions
     await User.findByIdAndUpdate(userId, {
@@ -187,15 +231,24 @@ async function removeReaction(req, res) {
 
 // GET /reactions/:postId
 async function getPostReactions(req, res) {
-  console.log('🔵 [REACTION] GET /reactions/:postId - Post ID:', req.params.postId);
+  const requestId = Math.random().toString(36).substr(2, 9);
+  console.log(`\n🔵 [REACTION-${requestId}] ===== GET POST REACTIONS =====`);
+  console.log(`🔵 [REACTION-${requestId}] GET /reactions/:postId - Post ID: ${req.params.postId}`);
+  console.log(`🔵 [REACTION-${requestId}] Query params:`, req.query);
+  
   try {
     const postId = req.params.postId;
-    console.log('🔵 [REACTION] Searching for reactions with postId:', postId);
+    const userId = req.query.userId; // Optional: to get user's specific reaction
+    
+    console.log(`🔍 [REACTION-${requestId}] Searching for reactions with postId: ${postId}`);
+    if (userId) {
+      console.log(`🔍 [REACTION-${requestId}] Also checking for user's reaction: ${userId}`);
+    }
     
     const reactions = await Reaction.find({ postId })
       .populate('userId', 'name alias anonymousId');
 
-    console.log('🔵 [REACTION] Found', reactions.length, 'raw reactions');
+    console.log(`🔵 [REACTION-${requestId}] Found ${reactions.length} raw reactions`);
 
     // Group reactions by type
     const reactionCounts = {
@@ -209,13 +262,28 @@ async function getPostReactions(req, res) {
       reactionCounts[reaction.reactionType]++;
     });
 
-    console.log('✅ [REACTION] Reaction counts:', reactionCounts);
-    console.log('✅ [REACTION] Total reactions:', reactions.length);
+    console.log(`✅ [REACTION-${requestId}] Reaction counts:`, reactionCounts);
+    console.log(`✅ [REACTION-${requestId}] Total reactions: ${reactions.length}`);
+    
+    // Find user's reaction if userId provided
+    let userReaction = null;
+    if (userId) {
+      userReaction = reactions.find(r => r.userId._id.toString() === userId);
+      if (userReaction) {
+        console.log(`✅ [REACTION-${requestId}] User's reaction found: ${userReaction.reactionType}`);
+      } else {
+        console.log(`🔍 [REACTION-${requestId}] No reaction found for user: ${userId}`);
+      }
+    }
     
     const response = {
       postId: postId,
       reactions: reactionCounts,
       totalReactions: reactions.length,
+      userReaction: userReaction ? {
+        reactionType: userReaction.reactionType,
+        createdAt: userReaction.createdAt
+      } : null,
       userReactions: reactions.map(r => ({
         userId: r.userId._id,
         user: {
@@ -228,11 +296,13 @@ async function getPostReactions(req, res) {
       }))
     };
     
-    console.log('✅ [REACTION] Sending response for post:', postId);
+    console.log(`✅ [REACTION-${requestId}] Sending response for post: ${postId}`);
+    console.log(`🔵 [REACTION-${requestId}] ===== GET POST REACTIONS SUCCESS =====\n`);
     return res.json(response);
   } catch (err) {
-    console.log('❌ [REACTION] Error fetching reactions:', err.message);
-    console.log('❌ [REACTION] Full error:', err);
+    console.log(`❌ [REACTION-${requestId}] Error fetching reactions: ${err.message}`);
+    console.log(`❌ [REACTION-${requestId}] Full error:`, err);
+    console.log(`🔵 [REACTION-${requestId}] ===== GET POST REACTIONS FAILED =====\n`);
     return res.status(500).json({ error: 'internal_error' });
   }
 }
