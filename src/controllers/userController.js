@@ -57,12 +57,20 @@ async function createUser(req, res) {
     console.log(`🟡 [USER-${requestId}] All validations passed, creating user...`);
     console.log(`🟡 [USER-${requestId}] User data: { name: "${name}", email: "${email}", password: "[HIDDEN]" }`);
     
-    const user = await User.create({ name, email, password });
+    // Generate alias and anonymousId for new users
+    const alias = generateAlias();
+    const anonymousId = generateAnonymousId();
+    console.log(`🟡 [USER-${requestId}] Generated alias: "${alias}"`);
+    console.log(`🟡 [USER-${requestId}] Generated anonymousId: "${anonymousId}"`);
+    
+    const user = await User.create({ name, email, password, alias, anonymousId });
     
     console.log(`✅ [USER-${requestId}] USER CREATED SUCCESSFULLY!`);
     console.log(`✅ [USER-${requestId}] User ID: ${user._id}`);
     console.log(`✅ [USER-${requestId}] User name: ${user.name}`);
     console.log(`✅ [USER-${requestId}] User email: ${user.email}`);
+    console.log(`✅ [USER-${requestId}] User alias: ${user.alias}`);
+    console.log(`✅ [USER-${requestId}] User anonymousId: ${user.anonymousId}`);
     console.log(`✅ [USER-${requestId}] Created at: ${user.createdAt}`);
     console.log(`🔵 [USER-${requestId}] ===== SIGNUP SUCCESS =====\n`);
     
@@ -70,8 +78,8 @@ async function createUser(req, res) {
       id: user._id, 
       name: user.name, 
       email: user.email,
-      alias: user.alias || null,
-      anonymousId: user.anonymousId || null
+      alias: user.alias,
+      anonymousId: user.anonymousId
     });
   } catch (err) {
     console.log(`❌ [USER-${requestId}] ERROR CREATING USER:`);
@@ -137,8 +145,7 @@ async function loginUser(req, res) {
     console.log(`🟡 [LOGIN-${requestId}] All validations passed, searching for user...`);
     console.log(`🟡 [LOGIN-${requestId}] Searching for user with email: "${email}"`);
     
-    const user = await User.findOne({ email, password });
-    
+    let user = await User.findOne({ email, password });
     if (!user) {
       console.log(`❌ [LOGIN-${requestId}] LOGIN FAILED - No user found with email: "${email}"`);
       console.log(`❌ [LOGIN-${requestId}] This could mean:`);
@@ -156,6 +163,29 @@ async function loginUser(req, res) {
     console.log(`✅ [LOGIN-${requestId}] User alias: ${user.alias || 'None'}`);
     console.log(`✅ [LOGIN-${requestId}] User anonymousId: ${user.anonymousId || 'None'}`);
     console.log(`✅ [LOGIN-${requestId}] User created at: ${user.createdAt}`);
+    
+    // Backfill alias/anonymousId if missing for existing users
+    let needsSave = false;
+    if (!user.alias) {
+      user.alias = generateAlias();
+      needsSave = true;
+      console.log(`🟡 [LOGIN-${requestId}] Backfilled missing alias: "${user.alias}"`);
+    }
+    if (!user.anonymousId) {
+      user.anonymousId = generateAnonymousId();
+      needsSave = true;
+      console.log(`🟡 [LOGIN-${requestId}] Backfilled missing anonymousId: "${user.anonymousId}"`);
+    }
+    
+    if (needsSave) {
+      try {
+        await user.save();
+        console.log(`✅ [LOGIN-${requestId}] User updated with backfilled data`);
+      } catch (saveErr) {
+        console.log(`⚠️ [LOGIN-${requestId}] Warning: Could not save backfilled data: ${saveErr.message}`);
+      }
+    }
+    
     console.log(`🔵 [LOGIN-${requestId}] ===== LOGIN SUCCESS =====\n`);
     
     return res.json({ 

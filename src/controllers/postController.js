@@ -12,16 +12,9 @@ async function createPost(req, res) {
       return res.status(400).json({ error: 'title, content, authorId, roomId are required' });
     }
 
-    // Calculate expiration date based on duration
-    let expiresAt = null;
-    if (duration && duration !== 'permanent') {
-      const now = new Date();
-      if (duration === '24h') {
-        expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      } else if (duration === '7d') {
-        expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      }
-    }
+    // Enforce 24-hour expiration for all posts by default
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     console.log('🟡 [POST] Creating post with:', { title, authorId, roomId, category, duration });
     const post = await Post.create({ 
@@ -30,7 +23,7 @@ async function createPost(req, res) {
       authorId, 
       roomId, 
       category: category || 'General',
-      duration: duration || 'permanent',
+      duration: '24h',
       isVoiceNote: isVoiceNote || false,
       expiresAt
     });
@@ -73,7 +66,14 @@ async function listPosts(req, res) {
   try {
     const { roomId, limit = 20, offset = 0 } = req.query;
     
-    let query = { isExpired: { $ne: true } };
+    // Exclude expired posts explicitly and by expiresAt
+    let query = { 
+      isExpired: { $ne: true },
+      $or: [
+        { expiresAt: null },
+        { expiresAt: { $gt: new Date() } }
+      ]
+    };
     if (roomId) {
       query.roomId = roomId;
       console.log('🔵 [POST] Filtering by roomId:', roomId);
@@ -130,6 +130,58 @@ async function listPosts(req, res) {
 module.exports = {
   createPost,
   listPosts,
+  // export for route usage
+  deletePost: async function deletePost(req, res) {
+    const { id } = req.params;
+    console.log('🔴 [POST] DELETE /posts/:id -', id);
+    try {
+      // Extract userId from common locations
+      const userIdFromHeader = req.get && req.get('x-user-id');
+      const userId = (req.body && req.body.userId) || (req.query && req.query.userId) || userIdFromHeader;
+
+      if (!userId) {
+        console.log('❌ [POST] Missing userId for delete');
+        return res.status(400).json({ error: 'userId_required' });
+      }
+
+      const post = await Post.findById(id);
+      if (!post) {
+        return res.status(404).json({ error: 'not_found' });
+      }
+
+      // Owner-only deletion enforcement
+      if (String(post.authorId) !== String(userId)) {
+        console.log('⛔ [POST] Delete forbidden: requester is not the post owner', {
+          requester: String(userId),
+          owner: String(post.authorId),
+          postId: String(post._id)
+        });
+        return res.status(403).json({ error: 'forbidden_not_owner' });
+      }
+
+      // Best-effort cascade delete reactions and comments
+      await Promise.all([
+        require('../models/Reaction').deleteMany({ postId: id }),
+        require('../models/Comment').deleteMany({ postId: id }),
+      ]);
+
+      await Post.deleteOne({ _id: id });
+
+      // Decrement counters (best-effort)
+      const Room = require('../models/Room');
+      const User = require('../models/User');
+      await Promise.allSettled([
+        Room.findByIdAndUpdate(post.roomId, { $inc: { recentPostCount: -1 } }),
+        User.findByIdAndUpdate(post.authorId, { $inc: { totalPosts: -1 } })
+      ]);
+
+      console.log('✅ [POST] Deleted post and relations', { postId: id });
+      return res.json({ success: true });
+    } catch (err) {
+      console.log('❌ [POST] Error deleting post:', err.message);
+      return res.status(500).json({ error: 'internal_error' });
+    }
+  },
 };
 
 

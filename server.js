@@ -134,6 +134,38 @@ async function bootstrap() {
   const mongooseConnection = getMongooseConnection();
   await runMigrations(mongooseConnection);
 
+  // Cleanup job: Remove expired posts periodically (every 10 minutes)
+  try {
+    const Post = require('./src/models/Post');
+    const Reaction = require('./src/models/Reaction');
+    const Comment = require('./src/models/Comment');
+    const Room = require('./src/models/Room');
+    const User = require('./src/models/User');
+
+    const removeExpiredPosts = async () => {
+      const now = new Date();
+      const expired = await Post.find({ expiresAt: { $lte: now } });
+      for (const post of expired) {
+        await Promise.all([
+          Reaction.deleteMany({ postId: post._id }),
+          Comment.deleteMany({ postId: post._id }),
+          Post.deleteOne({ _id: post._id })
+        ]);
+        await Promise.allSettled([
+          Room.findByIdAndUpdate(post.roomId, { $inc: { recentPostCount: -1 } }),
+          User.findByIdAndUpdate(post.authorId, { $inc: { totalPosts: -1 } })
+        ]);
+        console.log('🧹 [CLEANUP] Removed expired post', String(post._id));
+      }
+    };
+
+    // Run once at startup and then on interval
+    removeExpiredPosts().catch((e) => console.log('⚠️  [CLEANUP] Initial run failed:', e.message));
+    setInterval(removeExpiredPosts, 10 * 60 * 1000);
+  } catch (e) {
+    console.log('⚠️  [CLEANUP] Skipping setup:', e.message);
+  }
+
   // Start server
   app.listen(process.env.PORT || 5000, () => {
     console.log(`Server running on port ${process.env.PORT || 5000}`);
