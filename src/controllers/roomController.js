@@ -1,5 +1,6 @@
 const Room = require('../models/Room');
 const Post = require('../models/Post');
+const RoomMember = require('../models/RoomMember');
 
 // GET /rooms
 async function listRooms(req, res) {
@@ -28,17 +29,37 @@ async function listRooms(req, res) {
       isTrending: rooms[0].isTrending
     } : 'No rooms found');
     
-    const response = rooms.map(room => ({
-      id: room._id,
-      name: room.name,
-      description: room.description,
-      icon: room.icon,
-      gradient: room.gradient,
-      isTrending: room.isTrending,
-      memberCount: room.memberCount,
-      recentPostCount: room.recentPostCount,
-      lastActivity: room.lastActivity,
-      createdAt: room.createdAt
+    // Calculate dynamic stats for each room
+    const response = await Promise.all(rooms.map(async (room) => {
+      // Count members in this room
+      const memberCount = await RoomMember.countDocuments({ roomId: room._id });
+      
+      // Count recent posts (last 24 hours)
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recentPostCount = await Post.countDocuments({ 
+        roomId: room._id, 
+        createdAt: { $gte: oneDayAgo } 
+      });
+      
+      // Get last activity from most recent post
+      const lastPost = await Post.findOne({ roomId: room._id })
+        .sort({ createdAt: -1 })
+        .select('createdAt');
+      
+      const lastActivity = lastPost ? lastPost.createdAt : room.createdAt;
+      
+      return {
+        id: room._id,
+        name: room.name,
+        description: room.description,
+        icon: room.icon,
+        gradient: room.gradient,
+        isTrending: room.isTrending,
+        memberCount,
+        recentPostCount,
+        lastActivity,
+        createdAt: room.createdAt
+      };
     }));
     
     console.log('✅ [ROOM] Sending response with', response.length, 'rooms');
@@ -65,6 +86,23 @@ async function getRoom(req, res) {
       .sort({ createdAt: -1 })
       .limit(10);
 
+    // Calculate dynamic stats
+    const memberCount = await RoomMember.countDocuments({ roomId: req.params.id });
+    
+    // Count recent posts (last 24 hours)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentPostCount = await Post.countDocuments({ 
+      roomId: req.params.id, 
+      createdAt: { $gte: oneDayAgo } 
+    });
+    
+    // Get last activity from most recent post
+    const lastPost = await Post.findOne({ roomId: req.params.id })
+      .sort({ createdAt: -1 })
+      .select('createdAt');
+    
+    const lastActivity = lastPost ? lastPost.createdAt : room.createdAt;
+
     console.log('✅ [ROOM] Found room with', recentPosts.length, 'recent posts');
     return res.json({
       id: room._id,
@@ -73,9 +111,9 @@ async function getRoom(req, res) {
       icon: room.icon,
       gradient: room.gradient,
       isTrending: room.isTrending,
-      memberCount: room.memberCount,
-      recentPostCount: room.recentPostCount,
-      lastActivity: room.lastActivity,
+      memberCount,
+      recentPostCount,
+      lastActivity,
       recentPosts: recentPosts.map(post => ({
         id: post._id,
         title: post.title,
@@ -102,7 +140,7 @@ async function createRoom(req, res) {
   console.log('🔵 [ROOM] POST /rooms - Creating new room');
   console.log('🔵 [ROOM] Request body:', req.body);
   try {
-    const { name, description, icon, gradient, category } = req.body;
+    const { name, description, icon, gradient } = req.body;
     
     // Validate required fields
     if (!name || !description) {
@@ -115,11 +153,10 @@ async function createRoom(req, res) {
       description,
       icon: icon || '🏠',
       gradient: gradient || 'bg-gradient-to-br from-blue-500 to-purple-600',
-      category: category || 'General',
       memberCount: 0,
       recentPostCount: 0,
       isTrending: false,
-      lastActivity: 'Just created'
+      lastActivity: new Date()
     });
 
     const savedRoom = await newRoom.save();
@@ -131,7 +168,6 @@ async function createRoom(req, res) {
       description: savedRoom.description,
       icon: savedRoom.icon,
       gradient: savedRoom.gradient,
-      category: savedRoom.category,
       isTrending: savedRoom.isTrending,
       memberCount: savedRoom.memberCount,
       recentPostCount: savedRoom.recentPostCount,
