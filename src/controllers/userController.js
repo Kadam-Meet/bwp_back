@@ -24,25 +24,69 @@ function generateAlias() {
 
 // POST /users
 async function createUser(req, res) {
-  console.log('🔵 [USER] POST /users - Request body:', req.body);
+  const requestId = Math.random().toString(36).substr(2, 9);
+  console.log(`\n🔵 [USER-${requestId}] ===== SIGNUP REQUEST =====`);
+  console.log(`🔵 [USER-${requestId}] POST /users - Request body:`, JSON.stringify(req.body, null, 2));
+  console.log(`🔵 [USER-${requestId}] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`🔵 [USER-${requestId}] IP: ${req.ip || req.connection.remoteAddress}`);
+  console.log(`🔵 [USER-${requestId}] User-Agent: ${req.get('User-Agent')}`);
+  
   try {
     const { name, email, password } = req.body;
+    
+    // Detailed validation logging
+    console.log(`🔍 [USER-${requestId}] Validating input fields:`);
+    console.log(`🔍 [USER-${requestId}] - name: "${name}" (type: ${typeof name}, length: ${name?.length})`);
+    console.log(`🔍 [USER-${requestId}] - email: "${email}" (type: ${typeof email}, length: ${email?.length})`);
+    console.log(`🔍 [USER-${requestId}] - password: "${password ? '[PROVIDED]' : '[MISSING]'}" (type: ${typeof password}, length: ${password?.length})`);
+    
     if (!name || !email || !password) {
-      console.log('❌ [USER] Missing required fields');
+      const missing = [];
+      if (!name) missing.push('name');
+      if (!email) missing.push('email');
+      if (!password) missing.push('password');
+      console.log(`❌ [USER-${requestId}] VALIDATION FAILED - Missing fields: ${missing.join(', ')}`);
       return res.status(400).json({ error: 'name, email, and password are required' });
     }
+    
     if (!isValidEmail(email)) {
+      console.log(`❌ [USER-${requestId}] VALIDATION FAILED - Invalid email format: "${email}"`);
       return res.status(400).json({ error: 'invalid_email' });
     }
-    console.log('🟡 [USER] Creating user with:', { name, email });
+    
+    console.log(`🟡 [USER-${requestId}] All validations passed, creating user...`);
+    console.log(`🟡 [USER-${requestId}] User data: { name: "${name}", email: "${email}", password: "[HIDDEN]" }`);
+    
     const user = await User.create({ name, email, password });
-    console.log('✅ [USER] User created successfully:', user._id);
-    return res.status(201).json({ id: user._id, name: user.name, email: user.email });
+    
+    console.log(`✅ [USER-${requestId}] USER CREATED SUCCESSFULLY!`);
+    console.log(`✅ [USER-${requestId}] User ID: ${user._id}`);
+    console.log(`✅ [USER-${requestId}] User name: ${user.name}`);
+    console.log(`✅ [USER-${requestId}] User email: ${user.email}`);
+    console.log(`✅ [USER-${requestId}] Created at: ${user.createdAt}`);
+    console.log(`🔵 [USER-${requestId}] ===== SIGNUP SUCCESS =====\n`);
+    
+    return res.status(201).json({ 
+      id: user._id, 
+      name: user.name, 
+      email: user.email,
+      alias: user.alias || null,
+      anonymousId: user.anonymousId || null
+    });
   } catch (err) {
-    console.log('❌ [USER] Error creating user:', err.message);
+    console.log(`❌ [USER-${requestId}] ERROR CREATING USER:`);
+    console.log(`❌ [USER-${requestId}] Error message: ${err.message}`);
+    console.log(`❌ [USER-${requestId}] Error code: ${err.code || 'N/A'}`);
+    console.log(`❌ [USER-${requestId}] Error stack: ${err.stack}`);
+    console.log(`❌ [USER-${requestId}] Full error object:`, JSON.stringify(err, null, 2));
+    
     if (err && err.code === 11000) {
+      console.log(`❌ [USER-${requestId}] DUPLICATE EMAIL ERROR - Email already exists: "${req.body.email}"`);
+      console.log(`🔵 [USER-${requestId}] ===== SIGNUP FAILED (DUPLICATE) =====\n`);
       return res.status(409).json({ error: 'email already exists' });
     }
+    
+    console.log(`🔵 [USER-${requestId}] ===== SIGNUP FAILED (INTERNAL ERROR) =====\n`);
     return res.status(500).json({ error: 'internal_error' });
   }
 }
@@ -62,37 +106,162 @@ async function listUsers(_req, res) {
 
 // POST /users/login
 async function loginUser(req, res) {
-  console.log('🔵 [USER] POST /users/login - Request body:', req.body);
+  const requestId = Math.random().toString(36).substr(2, 9);
+  console.log(`\n🔵 [LOGIN-${requestId}] ===== LOGIN REQUEST =====`);
+  console.log(`🔵 [LOGIN-${requestId}] POST /users/login - Request body:`, JSON.stringify(req.body, null, 2));
+  console.log(`🔵 [LOGIN-${requestId}] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`🔵 [LOGIN-${requestId}] IP: ${req.ip || req.connection.remoteAddress}`);
+  console.log(`🔵 [LOGIN-${requestId}] User-Agent: ${req.get('User-Agent')}`);
+  
   try {
     const { email, password } = req.body || {};
+    
+    // Detailed validation logging
+    console.log(`🔍 [LOGIN-${requestId}] Validating input fields:`);
+    console.log(`🔍 [LOGIN-${requestId}] - email: "${email}" (type: ${typeof email}, length: ${email?.length})`);
+    console.log(`🔍 [LOGIN-${requestId}] - password: "${password ? '[PROVIDED]' : '[MISSING]'}" (type: ${typeof password}, length: ${password?.length})`);
+    
     if (!email || !password) {
+      const missing = [];
+      if (!email) missing.push('email');
+      if (!password) missing.push('password');
+      console.log(`❌ [LOGIN-${requestId}] VALIDATION FAILED - Missing fields: ${missing.join(', ')}`);
       return res.status(400).json({ error: 'email and password are required' });
     }
+    
     if (!isValidEmail(email)) {
+      console.log(`❌ [LOGIN-${requestId}] VALIDATION FAILED - Invalid email format: "${email}"`);
       return res.status(400).json({ error: 'invalid_email' });
     }
+    
+    console.log(`🟡 [LOGIN-${requestId}] All validations passed, searching for user...`);
+    console.log(`🟡 [LOGIN-${requestId}] Searching for user with email: "${email}"`);
+    
     const user = await User.findOne({ email, password });
+    
     if (!user) {
+      console.log(`❌ [LOGIN-${requestId}] LOGIN FAILED - No user found with email: "${email}"`);
+      console.log(`❌ [LOGIN-${requestId}] This could mean:`);
+      console.log(`❌ [LOGIN-${requestId}] 1. Email doesn't exist in database`);
+      console.log(`❌ [LOGIN-${requestId}] 2. Password is incorrect`);
+      console.log(`❌ [LOGIN-${requestId}] 3. User account was deleted`);
+      console.log(`🔵 [LOGIN-${requestId}] ===== LOGIN FAILED (INVALID CREDENTIALS) =====\n`);
       return res.status(401).json({ error: 'invalid_credentials' });
     }
-    return res.json({ id: user._id, name: user.name, email: user.email, alias: user.alias || null, anonymousId: user.anonymousId || null });
+    
+    console.log(`✅ [LOGIN-${requestId}] LOGIN SUCCESSFUL!`);
+    console.log(`✅ [LOGIN-${requestId}] User ID: ${user._id}`);
+    console.log(`✅ [LOGIN-${requestId}] User name: ${user.name}`);
+    console.log(`✅ [LOGIN-${requestId}] User email: ${user.email}`);
+    console.log(`✅ [LOGIN-${requestId}] User alias: ${user.alias || 'None'}`);
+    console.log(`✅ [LOGIN-${requestId}] User anonymousId: ${user.anonymousId || 'None'}`);
+    console.log(`✅ [LOGIN-${requestId}] User created at: ${user.createdAt}`);
+    console.log(`🔵 [LOGIN-${requestId}] ===== LOGIN SUCCESS =====\n`);
+    
+    return res.json({ 
+      id: user._id, 
+      name: user.name, 
+      email: user.email, 
+      alias: user.alias || null, 
+      anonymousId: user.anonymousId || null 
+    });
   } catch (err) {
-    console.log('❌ [USER] Error during login:', err.message);
+    console.log(`❌ [LOGIN-${requestId}] ERROR DURING LOGIN:`);
+    console.log(`❌ [LOGIN-${requestId}] Error message: ${err.message}`);
+    console.log(`❌ [LOGIN-${requestId}] Error code: ${err.code || 'N/A'}`);
+    console.log(`❌ [LOGIN-${requestId}] Error stack: ${err.stack}`);
+    console.log(`❌ [LOGIN-${requestId}] Full error object:`, JSON.stringify(err, null, 2));
+    console.log(`🔵 [LOGIN-${requestId}] ===== LOGIN FAILED (INTERNAL ERROR) =====\n`);
     return res.status(500).json({ error: 'internal_error' });
   }
 }
 
 // POST /users/anonymous
-async function createAnonymous(_req, res) {
-  console.log('🔵 [USER] POST /users/anonymous - Generating anonymous identity');
+async function createAnonymous(req, res) {
+  const requestId = Math.random().toString(36).substr(2, 9);
+  console.log(`\n🔵 [ANON-${requestId}] ===== ANONYMOUS REQUEST =====`);
+  console.log(`🔵 [ANON-${requestId}] POST /users/anonymous - Request body:`, JSON.stringify(req.body, null, 2));
+  console.log(`🔵 [ANON-${requestId}] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`🔵 [ANON-${requestId}] IP: ${req.ip || req.connection.remoteAddress}`);
+  console.log(`🔵 [ANON-${requestId}] User-Agent: ${req.get('User-Agent')}`);
+  
   try {
+    console.log(`🟡 [ANON-${requestId}] Generating anonymous identity...`);
+    
     const alias = generateAlias();
     const anonymousId = generateAnonymousId();
+    
+    console.log(`✅ [ANON-${requestId}] ANONYMOUS IDENTITY CREATED!`);
+    console.log(`✅ [ANON-${requestId}] Generated alias: "${alias}"`);
+    console.log(`✅ [ANON-${requestId}] Generated anonymousId: "${anonymousId}"`);
+    console.log(`✅ [ANON-${requestId}] Note: Anonymous users are not persisted to database`);
+    console.log(`🔵 [ANON-${requestId}] ===== ANONYMOUS SUCCESS =====\n`);
+    
     // We do not persist anonymous users to DB to avoid required fields; frontend can use this session ephemeral identity.
-    return res.status(201).json({ id: null, name: alias, email: null, alias, anonymousId });
+    return res.status(201).json({ 
+      id: null, 
+      name: alias, 
+      email: null, 
+      alias, 
+      anonymousId 
+    });
   } catch (err) {
-    console.log('❌ [USER] Error creating anonymous identity:', err.message);
+    console.log(`❌ [ANON-${requestId}] ERROR CREATING ANONYMOUS IDENTITY:`);
+    console.log(`❌ [ANON-${requestId}] Error message: ${err.message}`);
+    console.log(`❌ [ANON-${requestId}] Error code: ${err.code || 'N/A'}`);
+    console.log(`❌ [ANON-${requestId}] Error stack: ${err.stack}`);
+    console.log(`❌ [ANON-${requestId}] Full error object:`, JSON.stringify(err, null, 2));
+    console.log(`🔵 [ANON-${requestId}] ===== ANONYMOUS FAILED =====\n`);
     return res.status(500).json({ error: 'internal_error' });
+  }
+}
+
+// GET /users/test - Simple test endpoint
+async function testEndpoint(req, res) {
+  const requestId = Math.random().toString(36).substr(2, 9);
+  console.log(`\n🔵 [TEST-${requestId}] ===== TEST ENDPOINT =====`);
+  console.log(`🔵 [TEST-${requestId}] GET /users/test - Testing authentication system`);
+  console.log(`🔵 [TEST-${requestId}] IP: ${req.ip || req.connection.remoteAddress}`);
+  console.log(`🔵 [TEST-${requestId}] User-Agent: ${req.get('User-Agent')}`);
+  
+  try {
+    // Test database connection
+    const userCount = await User.countDocuments();
+    console.log(`✅ [TEST-${requestId}] Database connection successful`);
+    console.log(`✅ [TEST-${requestId}] Total users in database: ${userCount}`);
+    
+    const response = {
+      status: 'success',
+      message: 'Authentication system is working',
+      timestamp: new Date().toISOString(),
+      database: {
+        connected: true,
+        userCount: userCount
+      },
+      endpoints: {
+        signup: 'POST /api/users',
+        login: 'POST /api/users/login',
+        anonymous: 'POST /api/users/anonymous',
+        list: 'GET /api/users'
+      }
+    };
+    
+    console.log(`✅ [TEST-${requestId}] Test completed successfully`);
+    console.log(`🔵 [TEST-${requestId}] ===== TEST SUCCESS =====\n`);
+    
+    return res.json(response);
+  } catch (err) {
+    console.log(`❌ [TEST-${requestId}] TEST FAILED:`);
+    console.log(`❌ [TEST-${requestId}] Error message: ${err.message}`);
+    console.log(`❌ [TEST-${requestId}] Error stack: ${err.stack}`);
+    console.log(`🔵 [TEST-${requestId}] ===== TEST FAILED =====\n`);
+    
+    return res.status(500).json({
+      status: 'error',
+      message: 'Authentication system test failed',
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
   }
 }
 
@@ -101,6 +270,7 @@ module.exports = {
   listUsers,
   loginUser,
   createAnonymous,
+  testEndpoint,
 };
 
 
