@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 
 function isValidEmail(email) {
@@ -295,11 +296,62 @@ async function testEndpoint(req, res) {
   }
 }
 
+// POST /users/logout
+async function logoutUser(req, res) {
+  const requestId = Math.random().toString(36).substr(2, 9);
+  console.log(`\n🔵 [LOGOUT-${requestId}] ===== LOGOUT REQUEST =====`);
+  console.log(`🔵 [LOGOUT-${requestId}] POST /users/logout - Request body:`, JSON.stringify(req.body, null, 2));
+  console.log(`🔵 [LOGOUT-${requestId}] Headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`🔵 [LOGOUT-${requestId}] IP: ${req.ip || req.connection.remoteAddress}`);
+  console.log(`🔵 [LOGOUT-${requestId}] User-Agent: ${req.get('User-Agent')}`);
+  
+  try {
+    const { userId } = req.body || {};
+    
+    console.log(`🔍 [LOGOUT-${requestId}] Validating logout request:`);
+    console.log(`🔍 [LOGOUT-${requestId}] - userId: "${userId}" (type: ${typeof userId})`);
+    
+    // Handle demo user case
+    if (userId === 'demo-user-id') {
+      console.log(`🟡 [LOGOUT-${requestId}] DEMO USER LOGOUT - No database action needed`);
+      console.log(`🔵 [LOGOUT-${requestId}] ===== DEMO LOGOUT SUCCESS =====\n`);
+      return res.status(200).json({ 
+        message: 'Demo user logged out successfully',
+        isDemo: true 
+      });
+    }
+    
+    // For real users, we could update lastActiveAt or perform cleanup
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+      console.log(`🟡 [LOGOUT-${requestId}] Updating user's last active time...`);
+      await User.findByIdAndUpdate(userId, {
+        lastActiveAt: new Date()
+      });
+      console.log(`✅ [LOGOUT-${requestId}] Updated user's last active time`);
+    }
+    
+    console.log(`✅ [LOGOUT-${requestId}] LOGOUT SUCCESSFUL!`);
+    console.log(`🔵 [LOGOUT-${requestId}] ===== LOGOUT SUCCESS =====\n`);
+    
+    return res.status(200).json({ 
+      message: 'Logged out successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.log(`❌ [LOGOUT-${requestId}] ERROR DURING LOGOUT:`);
+    console.log(`❌ [LOGOUT-${requestId}] Error message: ${err.message}`);
+    console.log(`❌ [LOGOUT-${requestId}] Error stack: ${err.stack}`);
+    console.log(`🔵 [LOGOUT-${requestId}] ===== LOGOUT FAILED =====\n`);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+}
+
 module.exports = {
   createUser,
   listUsers,
   loginUser,
   createAnonymous,
+  logoutUser,
   testEndpoint,
 };
 
